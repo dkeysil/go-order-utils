@@ -30,8 +30,6 @@ linters:
             - - upperCaseConst: true # allow ALL_CAPS exported consts (matches SDK naming)
   exclusions:
     generated: lax
-    paths:
-      - pkg/contracts
     rules:
       # OrderData.TokenId mirrors tokenId on the wire (TS/Py SDKs). Keep the
       # stylistic name even though revive prefers TokenID.

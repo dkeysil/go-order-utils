@@ -130,6 +130,16 @@ func TestV2Goldens(t *testing.T) {
 			sig:      "4ede1c23998c8d86a6cb3a4fd5fe94df824e4104f88dd5182905411ff6a568fa345d9ba51d3833ba76327e68beb06f4fb78ade58cc69e8c0859c89b548aad3131b",
 		},
 		{
+			// POLY_1271 Signer is a smart contract whose isValidSignature()
+			// authorizes the provided privateKey's EOA. The signature bytes
+			// still come from the EOA — the local ecrecover check is skipped.
+			name:     "CTFExchange POLY_1271",
+			contract: model.CTFExchange,
+			sigType:  model.POLY_1271,
+			hash:     "0x476135297e4fc5246f359be914c1f083dd27b71081bdce54d453f6317895139f",
+			sig:      "a54cdd9888dcbb3ea9715158ac08b27042be945a28cac645f28b92e23f9b4f9a16ac91aec9d85a5c9ecda794f0f3728cf42acc8d0f967a2e6671c1d1df2317e51b",
+		},
+		{
 			name:     "CTFExchange EOA non-zero metadata+builder",
 			contract: model.CTFExchange,
 			sigType:  model.EOA,
@@ -168,6 +178,31 @@ func TestV2Goldens(t *testing.T) {
 			assert.Equal(t, tc.sig, hex.EncodeToString(signed.Signature))
 		})
 	}
+}
+
+// TestBuildSignedOrder_POLY1271SkipsEcrecover exercises the contract-wallet
+// path: Signer is a smart-contract address that the EOA privateKey is
+// authorized to sign for. The local ecrecover check cannot match the contract
+// address, so the method must return the signature without erroring. This
+// case fails under a V1-style unconditional ValidateSignature.
+func TestBuildSignedOrder_POLY1271SkipsEcrecover(t *testing.T) {
+	b := newFixedBuilder()
+	safeLikeContract := common.HexToAddress("0x000000000000000000000000000000000000dEaD")
+
+	signed, err := b.BuildSignedOrder(privateKey, &model.OrderData{
+		Maker:         safeLikeContract.Hex(),
+		Signer:        safeLikeContract.Hex(),
+		TokenId:       "1234",
+		MakerAmount:   "100000000",
+		TakerAmount:   "50000000",
+		Side:          model.BUY,
+		SignatureType: model.POLY_1271,
+		Timestamp:     timestampMs,
+	}, model.CTFExchange)
+	assert.NoError(t, err)
+	assert.NotNil(t, signed)
+	assert.Len(t, signed.Signature, 65)
+	assert.Equal(t, safeLikeContract, signed.Signer)
 }
 
 func TestBuildOrderHash_UnsupportedChain(t *testing.T) {

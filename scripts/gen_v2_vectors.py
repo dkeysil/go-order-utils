@@ -73,6 +73,7 @@ if __name__ == "__main__":
     vector("CTFExchange V2, EOA", EXCHANGE_V2, SignatureTypeV2.EOA)
     vector("NegRiskCTFExchange V2, EOA", NEG_RISK_EXCHANGE_V2, SignatureTypeV2.EOA)
     vector("CTFExchange V2, POLY_GNOSIS_SAFE", EXCHANGE_V2, SignatureTypeV2.POLY_GNOSIS_SAFE)
+    vector("CTFExchange V2, POLY_1271", EXCHANGE_V2, SignatureTypeV2.POLY_1271)
     vector(
         "CTFExchange V2, EOA, with non-zero metadata + builder",
         EXCHANGE_V2,

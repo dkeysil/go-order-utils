@@ -60,6 +60,13 @@ func NewExchangeOrderBuilderImpl(chainID *big.Int, saltGenerator func() int64, t
 }
 
 // BuildSignedOrder assembles an Order, hashes it, and attaches an ECDSA signature.
+//
+// For EOA / POLY_PROXY / POLY_GNOSIS_SAFE orders the returned signature is
+// locally verified against order.Signer via ecrecover. For POLY_1271 orders
+// the local check is skipped: order.Signer is a smart-contract address, so
+// ecrecover cannot reproduce it — the signature is instead validated on-chain
+// via EIP-1271 (`isValidSignature`) by the operator at fill time. Callers
+// must ensure the contract authorizes the provided privateKey's EOA.
 func (e *ExchangeOrderBuilderImpl) BuildSignedOrder(privateKey *ecdsa.PrivateKey, orderData *model.OrderData, contract model.VerifyingContract) (*model.SignedOrder, error) {
 	order, err := e.BuildOrder(orderData)
 	if err != nil {
@@ -76,12 +83,14 @@ func (e *ExchangeOrderBuilderImpl) BuildSignedOrder(privateKey *ecdsa.PrivateKey
 		return nil, err
 	}
 
-	ok, err := signer.ValidateSignature(order.Signer, orderHash, signature)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("signature error")
+	if order.SignatureType != uint8(model.POLY_1271) {
+		ok, err := signer.ValidateSignature(order.Signer, orderHash, signature)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("signature error")
+		}
 	}
 
 	return &model.SignedOrder{
