@@ -9,16 +9,18 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-func BuildEIP712DomainSeparator(name, version common.Hash, chainId *big.Int, address common.Address) (common.Hash, error) {
-	values := []interface{}{
-		_EIP712_DOMAIN_HASH,
+// BuildEIP712DomainSeparator returns keccak256(encodeEIP712Domain{name,
+// version, chainId, verifyingContract}) per EIP-712.
+func BuildEIP712DomainSeparator(name, version common.Hash, chainID *big.Int, address common.Address) (common.Hash, error) {
+	values := []any{
+		eip712DomainHash,
 		name,
 		version,
-		chainId,
+		chainID,
 		address,
 	}
 
-	encodedDomainSeparator, err := Encode(_EIP712_DOMAIN, values)
+	encodedDomainSeparator, err := Encode(eip712Domain, values)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -26,15 +28,17 @@ func BuildEIP712DomainSeparator(name, version common.Hash, chainId *big.Int, add
 	return crypto.Keccak256Hash(encodedDomainSeparator), nil
 }
 
-func BuildEIP712DomainSeparatorNoContract(name, version common.Hash, chainId *big.Int) (common.Hash, error) {
-	values := []interface{}{
-		_EIP712_DOMAIN_HASH_NO_VERIFYING_CONTRACT,
+// BuildEIP712DomainSeparatorNoContract is the EIP-712 domain separator without
+// a verifyingContract field; used by Polymarket's ClobAuth domain.
+func BuildEIP712DomainSeparatorNoContract(name, version common.Hash, chainID *big.Int) (common.Hash, error) {
+	values := []any{
+		eip712DomainHashNoVerifyingContract,
 		name,
 		version,
-		chainId,
+		chainID,
 	}
 
-	encodedDomainSeparator, err := Encode(_EIP712_DOMAIN_NO_VERIFYING_CONTRACT, values)
+	encodedDomainSeparator, err := Encode(eip712DomainNoVerifyingContract, values)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -42,12 +46,14 @@ func BuildEIP712DomainSeparatorNoContract(name, version common.Hash, chainId *bi
 	return crypto.Keccak256Hash(encodedDomainSeparator), nil
 }
 
-func HashTypedDataV4(domainSeparator common.Hash, args []abi.Type, values []interface{}) (common.Hash, error) {
+// HashTypedDataV4 computes the final EIP-712 digest (0x1901 || domainSeparator
+// || keccak256(abiEncode(args, values))).
+func HashTypedDataV4(domainSeparator common.Hash, args []abi.Type, values []any) (common.Hash, error) {
 	encoded, err := Encode(args, values)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator[:]), string(crypto.Keccak256Hash(encoded).Bytes())))
+	rawData := fmt.Appendf(nil, "\x19\x01%s%s", string(domainSeparator[:]), string(crypto.Keccak256Hash(encoded).Bytes()))
 	return crypto.Keccak256Hash(rawData), nil
 }

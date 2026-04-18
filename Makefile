@@ -14,8 +14,9 @@ lint:
 	@echo "----------------------------------------------------------------"
 	@echo " ⚙️  Linting code..."
 	@echo "----------------------------------------------------------------"
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2
-	golangci-lint run ./... -E gofmt --config=.golangci.yaml
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
+	golangci-lint run ./... --config=.golangci.yaml
+	golangci-lint fmt --diff ./...
 	go mod tidy
 	@echo "Linting complete!"
 

@@ -13,7 +13,7 @@ import (
 
 // Golden vectors are produced by scripts/gen_v2_vectors.py (py-clob-client-v2).
 var (
-	chainId       = new(big.Int).SetInt64(80002)
+	chainID       = new(big.Int).SetInt64(80002)
 	privateKey, _ = crypto.ToECDSA(common.Hex2Bytes("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"))
 	signerAddress = common.HexToAddress("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
 
@@ -24,13 +24,13 @@ var (
 )
 
 func newFixedBuilder() *ExchangeOrderBuilderImpl {
-	return NewExchangeOrderBuilderImpl(chainId, func() int64 { return salt }, func() int64 { return timestampMs })
+	return NewExchangeOrderBuilderImpl(chainID, func() int64 { return salt }, func() int64 { return timestampMs })
 }
 
 func TestBuildOrder_DefaultsAndParsing(t *testing.T) {
 	// Random salt + default timestamp: only assert fields are parsed and
 	// defaults kick in.
-	b := NewExchangeOrderBuilderImpl(chainId, nil, nil)
+	b := NewExchangeOrderBuilderImpl(chainID, nil, nil)
 
 	order, err := b.BuildOrder(&model.OrderData{
 		Maker:       signerAddress.Hex(),

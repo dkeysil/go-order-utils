@@ -1,3 +1,6 @@
+// Package utils contains small helpers shared by the builder and signer
+// packages: contract-address lookups, random salt generation, and timestamp
+// generation.
 package utils
 
 import (
@@ -9,8 +12,10 @@ import (
 	"github.com/polymarket/go-order-utils/pkg/model"
 )
 
-func GetVerifyingContractAddress(chainId *big.Int, contract model.VerifyingContract) (common.Address, error) {
-	contracts, err := config.GetContracts(chainId.Int64())
+// GetVerifyingContractAddress returns the deployed address of the requested
+// exchange contract on the given chain.
+func GetVerifyingContractAddress(chainID *big.Int, contract model.VerifyingContract) (common.Address, error) {
+	contracts, err := config.GetContracts(chainID.Int64())
 	if err != nil {
 		return common.Address{}, err
 	}

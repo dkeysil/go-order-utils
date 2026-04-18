@@ -1,3 +1,5 @@
+// Package signer wraps go-ethereum ECDSA signing with the Ethereum 27/28
+// recovery-byte convention used by Polymarket order signatures.
 package signer
 
 import (
@@ -9,8 +11,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// ErrInvalidSignatureLen is returned by ValidateSignature when the signature
+// is not exactly 65 bytes long.
 var ErrInvalidSignatureLen = errors.New("invalid signature length")
 
+// Sign produces a 65-byte ECDSA signature over hashedData with V adjusted to
+// the Ethereum 27/28 convention.
 func Sign(privateKey *ecdsa.PrivateKey, hashedData common.Hash) ([]byte, error) {
 	sign, err := crypto.Sign(hashedData.Bytes(), privateKey)
 	if err != nil {
@@ -20,6 +26,9 @@ func Sign(privateKey *ecdsa.PrivateKey, hashedData common.Hash) ([]byte, error) 
 	return sign, err
 }
 
+// ValidateSignature recovers the signer address from signature/hashedData and
+// compares it to the expected signer. Accepts both Ethereum-style (27/28) and
+// raw (0/1) recovery bytes.
 func ValidateSignature(signer common.Address, hashedData common.Hash, signature []byte) (bool, error) {
 	sigCopy := make([]byte, len(signature))
 	copy(sigCopy, signature)

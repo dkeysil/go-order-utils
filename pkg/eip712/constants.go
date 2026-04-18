@@ -1,3 +1,5 @@
+// Package eip712 provides primitives for computing EIP-712 typed-data digests
+// compatible with the Polymarket protocol.
 package eip712
 
 import (
@@ -6,7 +8,7 @@ import (
 )
 
 var (
-	_EIP712_DOMAIN = []abi.Type{
+	eip712Domain = []abi.Type{
 		Bytes32, // typehash
 		Bytes32, // name
 		Bytes32, // version
@@ -14,18 +16,18 @@ var (
 		Address, // verifyingContract
 	}
 
-	_EIP712_DOMAIN_HASH = crypto.Keccak256Hash(
+	eip712DomainHash = crypto.Keccak256Hash(
 		[]byte("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
 	)
 
-	_EIP712_DOMAIN_NO_VERIFYING_CONTRACT = []abi.Type{
+	eip712DomainNoVerifyingContract = []abi.Type{
 		Bytes32, // typehash
 		Bytes32, // name
 		Bytes32, // version
 		Uint256, // chainId
 	}
 
-	_EIP712_DOMAIN_HASH_NO_VERIFYING_CONTRACT = crypto.Keccak256Hash(
+	eip712DomainHashNoVerifyingContract = crypto.Keccak256Hash(
 		[]byte("EIP712Domain(string name,string version,uint256 chainId)"),
 	)
 )

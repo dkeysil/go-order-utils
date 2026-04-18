@@ -1,3 +1,4 @@
+// Package builder assembles, hashes, and signs V2 CTF Exchange orders.
 package builder
 
 import (
@@ -6,37 +7,22 @@ import (
 	"github.com/polymarket/go-order-utils/pkg/model"
 )
 
+// ExchangeOrderBuilder turns OrderData into signed V2 CTF Exchange orders.
+//
 //go:generate mockery --name ExchangeOrderBuilder
 type ExchangeOrderBuilder interface {
-	// build an order object including the signature.
-	//
-	// @param private key
-	//
-	// @param orderData
-	//
-	// @returns a SignedOrder object (order + signature)
+	// BuildSignedOrder assembles an Order, computes the EIP-712 digest, and
+	// returns the order plus its ECDSA signature.
 	BuildSignedOrder(privateKey *ecdsa.PrivateKey, orderData *model.OrderData, contract model.VerifyingContract) (*model.SignedOrder, error)
 
-	// Creates an Order object from order data.
-	//
-	// @param orderData
-	//
-	// @returns a Order object (not signed)
+	// BuildOrder populates an Order from OrderData, filling defaults (salt,
+	// timestamp, signer ← maker) as needed.
 	BuildOrder(orderData *model.OrderData) (*model.Order, error)
 
-	// Generates the hash of the order from a EIP712TypedData object.
-	//
-	// @param Order
-	//
-	// @returns a OrderHash that is a 'common.Hash'
+	// BuildOrderHash returns the EIP-712 digest of an Order under the given
+	// verifying contract.
 	BuildOrderHash(order *model.Order, contract model.VerifyingContract) (model.OrderHash, error)
 
-	// signs an order
-	//
-	// @param private key
-	//
-	// @param order hash
-	//
-	// @returns a OrderSignature that is []byte
+	// BuildOrderSignature produces the 65-byte ECDSA signature over orderHash.
 	BuildOrderSignature(privateKey *ecdsa.PrivateKey, orderHash model.OrderHash) (model.OrderSignature, error)
 }

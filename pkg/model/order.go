@@ -6,8 +6,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// OrderSignature is the 65-byte ECDSA signature attached to a SignedOrder.
 type OrderSignature = []byte
 
+// OrderHash is the EIP-712 digest of an Order.
 type OrderHash = common.Hash
 
 // OrderData is the caller-facing input to the V2 CTF Exchange order builder.
@@ -45,8 +47,7 @@ type OrderData struct {
 }
 
 // Order is the canonical V2 signed struct hashed into the EIP-712 digest.
-//
-// Field order here must match builder._ORDER_STRUCTURE.
+// Field order must match builder.orderStructure.
 type Order struct {
 	Salt          *big.Int
 	Maker         common.Address
@@ -61,6 +62,7 @@ type Order struct {
 	Builder       common.Hash
 }
 
+// SignedOrder is an Order plus its ECDSA signature.
 type SignedOrder struct {
 	Order
 

@@ -12,8 +12,9 @@ import (
 	"github.com/polymarket/go-order-utils/pkg/utils"
 )
 
+// ExchangeOrderBuilderImpl is the default ExchangeOrderBuilder implementation.
 type ExchangeOrderBuilderImpl struct {
-	chainId            *big.Int
+	chainID            *big.Int
 	saltGenerator      func() int64
 	timestampGenerator func() int64
 	domainSeparators   map[model.VerifyingContract]common.Hash
@@ -27,9 +28,9 @@ var _ ExchangeOrderBuilder = (*ExchangeOrderBuilderImpl)(nil)
 // utils.GenerateRandomSalt / utils.GenerateTimestampMs respectively.
 //
 // The domain separators for both supported verifying contracts are
-// precomputed at construction time, so unsupported chainIds fail here rather
-// than on every signing call.
-func NewExchangeOrderBuilderImpl(chainId *big.Int, saltGenerator func() int64, timestampGenerator func() int64) *ExchangeOrderBuilderImpl {
+// precomputed at construction time, so unsupported chain IDs surface their
+// error on the first signing call rather than at every call.
+func NewExchangeOrderBuilderImpl(chainID *big.Int, saltGenerator func() int64, timestampGenerator func() int64) *ExchangeOrderBuilderImpl {
 	if saltGenerator == nil {
 		saltGenerator = utils.GenerateRandomSalt
 	}
@@ -39,13 +40,11 @@ func NewExchangeOrderBuilderImpl(chainId *big.Int, saltGenerator func() int64, t
 
 	domainSeparators := map[model.VerifyingContract]common.Hash{}
 	for _, contract := range []model.VerifyingContract{model.CTFExchange, model.NegRiskCTFExchange} {
-		addr, err := utils.GetVerifyingContractAddress(chainId, contract)
+		addr, err := utils.GetVerifyingContractAddress(chainID, contract)
 		if err != nil {
-			// Unsupported chainId: leave the map empty; BuildOrderHash will
-			// surface the error when called.
 			continue
 		}
-		sep, err := eip712.BuildEIP712DomainSeparator(_PROTOCOL_NAME, _PROTOCOL_VERSION, chainId, addr)
+		sep, err := eip712.BuildEIP712DomainSeparator(protocolName, protocolVersion, chainID, addr)
 		if err != nil {
 			continue
 		}
@@ -53,13 +52,14 @@ func NewExchangeOrderBuilderImpl(chainId *big.Int, saltGenerator func() int64, t
 	}
 
 	return &ExchangeOrderBuilderImpl{
-		chainId:            chainId,
+		chainID:            chainID,
 		saltGenerator:      saltGenerator,
 		timestampGenerator: timestampGenerator,
 		domainSeparators:   domainSeparators,
 	}
 }
 
+// BuildSignedOrder assembles an Order, hashes it, and attaches an ECDSA signature.
 func (e *ExchangeOrderBuilderImpl) BuildSignedOrder(privateKey *ecdsa.PrivateKey, orderData *model.OrderData, contract model.VerifyingContract) (*model.SignedOrder, error) {
 	order, err := e.BuildOrder(orderData)
 	if err != nil {
@@ -90,14 +90,16 @@ func (e *ExchangeOrderBuilderImpl) BuildSignedOrder(privateKey *ecdsa.PrivateKey
 	}, nil
 }
 
+// BuildOrder converts an OrderData into a fully-populated V2 Order, defaulting
+// Salt, Timestamp, Signer (← Maker), and the zero-valued Metadata/Builder.
 func (e *ExchangeOrderBuilderImpl) BuildOrder(orderData *model.OrderData) (*model.Order, error) {
 	maker := common.HexToAddress(orderData.Maker)
-	signer := maker
+	signerAddr := maker
 	if orderData.Signer != "" {
-		signer = common.HexToAddress(orderData.Signer)
+		signerAddr = common.HexToAddress(orderData.Signer)
 	}
 
-	tokenId, ok := new(big.Int).SetString(orderData.TokenId, 10)
+	tokenID, ok := new(big.Int).SetString(orderData.TokenId, 10)
 	if !ok {
 		return nil, fmt.Errorf("can't parse TokenId: %s as valid *big.Int", orderData.TokenId)
 	}
@@ -120,8 +122,8 @@ func (e *ExchangeOrderBuilderImpl) BuildOrder(orderData *model.OrderData) (*mode
 	return &model.Order{
 		Salt:          new(big.Int).SetInt64(e.saltGenerator()),
 		Maker:         maker,
-		Signer:        signer,
-		TokenId:       tokenId,
+		Signer:        signerAddr,
+		TokenId:       tokenID,
 		MakerAmount:   makerAmount,
 		TakerAmount:   takerAmount,
 		Side:          uint8(orderData.Side),
@@ -132,14 +134,16 @@ func (e *ExchangeOrderBuilderImpl) BuildOrder(orderData *model.OrderData) (*mode
 	}, nil
 }
 
+// BuildOrderHash returns the EIP-712 digest for order under the given
+// verifying contract.
 func (e *ExchangeOrderBuilderImpl) BuildOrderHash(order *model.Order, contract model.VerifyingContract) (model.OrderHash, error) {
 	domainSeparator, ok := e.domainSeparators[contract]
 	if !ok {
-		return model.OrderHash{}, fmt.Errorf("unsupported verifying contract %d for chain %s", contract, e.chainId)
+		return model.OrderHash{}, fmt.Errorf("unsupported verifying contract %d for chain %s", contract, e.chainID)
 	}
 
 	values := []any{
-		_ORDER_STRUCTURE_HASH,
+		orderStructureHash,
 		order.Salt,
 		order.Maker,
 		order.Signer,
@@ -152,9 +156,11 @@ func (e *ExchangeOrderBuilderImpl) BuildOrderHash(order *model.Order, contract m
 		order.Metadata,
 		order.Builder,
 	}
-	return eip712.HashTypedDataV4(domainSeparator, _ORDER_STRUCTURE, values)
+	return eip712.HashTypedDataV4(domainSeparator, orderStructure, values)
 }
 
+// BuildOrderSignature signs orderHash with privateKey and returns the 65-byte
+// ECDSA signature.
 func (e *ExchangeOrderBuilderImpl) BuildOrderSignature(privateKey *ecdsa.PrivateKey, orderHash model.OrderHash) (model.OrderSignature, error) {
 	return signer.Sign(privateKey, orderHash)
 }
