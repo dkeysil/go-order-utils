@@ -11,4 +11,8 @@ const (
 
 	// EIP712 signatures signed by EOAs that own Polymarket Gnosis safes
 	POLY_GNOSIS_SAFE
+
+	// EIP1271 signatures signed by smart contracts (smart contract wallets or vaults).
+	// Added in V2.
+	POLY_1271
 )

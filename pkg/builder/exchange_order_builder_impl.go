@@ -13,29 +13,52 @@ import (
 )
 
 type ExchangeOrderBuilderImpl struct {
-	chainId       *big.Int
-	saltGenerator func() int64
+	chainId            *big.Int
+	saltGenerator      func() int64
+	timestampGenerator func() int64
 }
 
 var _ ExchangeOrderBuilder = (*ExchangeOrderBuilderImpl)(nil)
 
-func NewExchangeOrderBuilderImpl(chainId *big.Int, saltGenerator func() int64) *ExchangeOrderBuilderImpl {
-	if saltGenerator == nil {
-		saltGenerator = utils.GenerateRandomSalt
-	}
-	return &ExchangeOrderBuilderImpl{
-		chainId:       chainId,
-		saltGenerator: saltGenerator,
+// Option configures optional fields on an ExchangeOrderBuilderImpl at
+// construction time. Use functional options instead of growing the constructor
+// arg list for each new knob.
+type Option func(*ExchangeOrderBuilderImpl)
+
+// WithTimestampGenerator overrides the default unix-millisecond timestamp
+// generator. Primarily useful for deterministic tests.
+func WithTimestampGenerator(fn func() int64) Option {
+	return func(b *ExchangeOrderBuilderImpl) {
+		if fn != nil {
+			b.timestampGenerator = fn
+		}
 	}
 }
 
-// build an order object including the signature.
+// NewExchangeOrderBuilderImpl builds a V2 CTF Exchange order builder.
 //
-// @param private key
+// saltGenerator may be nil; it defaults to utils.GenerateRandomSalt.
+// Use WithTimestampGenerator to override the default time.Now().UnixMilli().
+func NewExchangeOrderBuilderImpl(chainId *big.Int, saltGenerator func() int64, opts ...Option) *ExchangeOrderBuilderImpl {
+	if saltGenerator == nil {
+		saltGenerator = utils.GenerateRandomSalt
+	}
+	b := &ExchangeOrderBuilderImpl{
+		chainId:            chainId,
+		saltGenerator:      saltGenerator,
+		timestampGenerator: utils.GenerateTimestampMs,
+	}
+	for _, opt := range opts {
+		opt(b)
+	}
+	return b
+}
+
+// BuildSignedOrder assembles a V2 order, hashes it under the EIP-712 domain
+// for the given exchange, and attaches an ECDSA signature.
 //
-// @param orderData
-//
-// @returns a SignedOrder object (order + signature)
+// The signature is verified locally before returning so that wiring mistakes
+// (wrong signer address, wrong typehash, ...) surface immediately.
 func (e *ExchangeOrderBuilderImpl) BuildSignedOrder(privateKey *ecdsa.PrivateKey, orderData *model.OrderData, contract model.VerifyingContract) (*model.SignedOrder, error) {
 	order, err := e.BuildOrder(orderData)
 	if err != nil {
@@ -66,11 +89,9 @@ func (e *ExchangeOrderBuilderImpl) BuildSignedOrder(privateKey *ecdsa.PrivateKey
 	}, nil
 }
 
-// Creates an Order object from order data.
-//
-// @param orderData
-//
-// @returns a Order object (not signed)
+// BuildOrder converts an OrderData into a fully-populated V2 Order, filling in
+// Salt, Timestamp, Metadata, Builder, and defaulting Signer←Maker when the
+// caller left Signer empty.
 func (e *ExchangeOrderBuilderImpl) BuildOrder(orderData *model.OrderData) (*model.Order, error) {
 	var signer common.Address
 	if orderData.Signer == "" {
@@ -95,45 +116,40 @@ func (e *ExchangeOrderBuilderImpl) BuildOrder(orderData *model.OrderData) (*mode
 		return nil, fmt.Errorf("can't parse TakerAmount: %s as valid *big.Int", orderData.TakerAmount)
 	}
 
-	var expiration *big.Int
-	if orderData.Expiration == "" {
-		orderData.Expiration = "0"
-	}
-	if expiration, ok = new(big.Int).SetString(orderData.Expiration, 10); !ok {
-		return nil, fmt.Errorf("can't parse Expiration: %s as valid *big.Int", orderData.Expiration)
-	}
-
-	var nonce *big.Int
-	if nonce, ok = new(big.Int).SetString(orderData.Nonce, 10); !ok {
-		return nil, fmt.Errorf("can't parse Nonce: %s as valid *big.Int", orderData.Nonce)
+	var timestamp *big.Int
+	if orderData.Timestamp == "" {
+		timestamp = new(big.Int).SetInt64(e.timestampGenerator())
+	} else if timestamp, ok = new(big.Int).SetString(orderData.Timestamp, 10); !ok {
+		return nil, fmt.Errorf("can't parse Timestamp: %s as valid *big.Int", orderData.Timestamp)
 	}
 
-	var feeRateBps *big.Int
-	if feeRateBps, ok = new(big.Int).SetString(orderData.FeeRateBps, 10); !ok {
-		return nil, fmt.Errorf("can't parse FeeRateBps: %s as valid *big.Int", orderData.FeeRateBps)
+	metadata, err := parseBytes32(orderData.Metadata, "Metadata")
+	if err != nil {
+		return nil, err
+	}
+
+	builder, err := parseBytes32(orderData.Builder, "Builder")
+	if err != nil {
+		return nil, err
 	}
 
 	return &model.Order{
 		Salt:          new(big.Int).SetInt64(e.saltGenerator()),
 		Maker:         common.HexToAddress(orderData.Maker),
-		Taker:         common.HexToAddress(orderData.Taker),
 		Signer:        signer,
 		TokenId:       tokenId,
 		MakerAmount:   makerAmount,
 		TakerAmount:   takerAmount,
 		Side:          new(big.Int).SetInt64(int64(orderData.Side)),
-		Expiration:    expiration,
-		Nonce:         nonce,
-		FeeRateBps:    feeRateBps,
 		SignatureType: new(big.Int).SetInt64(int64(orderData.SignatureType)),
+		Timestamp:     timestamp,
+		Metadata:      metadata,
+		Builder:       builder,
 	}, nil
 }
 
-// Generates the hash of the order from a EIP712TypedData object.
-//
-// @param Order
-//
-// @returns a OrderHash that is a 'common.Hash'
+// BuildOrderHash returns the EIP-712 digest for the V2 Order under the
+// requested verifying contract (CTF Exchange V2 or Neg-Risk CTF Exchange V2).
 func (e *ExchangeOrderBuilderImpl) BuildOrderHash(order *model.Order, contract model.VerifyingContract) (model.OrderHash, error) {
 	verifyingContract, err := utils.GetVerifyingContractAddress(e.chainId, contract)
 	if err != nil {
@@ -150,15 +166,14 @@ func (e *ExchangeOrderBuilderImpl) BuildOrderHash(order *model.Order, contract m
 		order.Salt,
 		order.Maker,
 		order.Signer,
-		order.Taker,
 		order.TokenId,
 		order.MakerAmount,
 		order.TakerAmount,
-		order.Expiration,
-		order.Nonce,
-		order.FeeRateBps,
 		uint8(order.Side.Uint64()),
 		uint8(order.SignatureType.Uint64()),
+		order.Timestamp,
+		order.Metadata,
+		order.Builder,
 	}
 	orderHash, err := eip712.HashTypedDataV4(domainSeparator, _ORDER_STRUCTURE, values)
 	if err != nil {
@@ -168,13 +183,25 @@ func (e *ExchangeOrderBuilderImpl) BuildOrderHash(order *model.Order, contract m
 	return orderHash, nil
 }
 
-// signs an order
-//
-// @param private key
-//
-// @param order hash
-//
-// @returns a OrderSignature that is []byte
 func (e *ExchangeOrderBuilderImpl) BuildOrderSignature(privateKey *ecdsa.PrivateKey, orderHash model.OrderHash) (model.OrderSignature, error) {
 	return signer.Sign(privateKey, orderHash)
+}
+
+// parseBytes32 accepts an empty string (→ zero hash) or a 0x-prefixed hex
+// string representing exactly 32 bytes. Returns an error for any other shape
+// so malformed metadata/builder values fail fast rather than silently
+// producing a wrong signature.
+func parseBytes32(s, field string) (common.Hash, error) {
+	if s == "" {
+		return model.Bytes32Zero, nil
+	}
+	hex := s
+	if len(hex) >= 2 && hex[:2] == "0x" {
+		hex = hex[2:]
+	}
+	if len(hex) != 64 {
+		return common.Hash{}, fmt.Errorf("invalid %s: expected 32-byte 0x-prefixed hex, got %q", field, s)
+	}
+	h := common.HexToHash(s)
+	return h, nil
 }
