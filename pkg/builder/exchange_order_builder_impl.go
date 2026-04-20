@@ -6,10 +6,10 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/polymarket/go-order-utils/pkg/eip712"
-	"github.com/polymarket/go-order-utils/pkg/model"
-	"github.com/polymarket/go-order-utils/pkg/signer"
-	"github.com/polymarket/go-order-utils/pkg/utils"
+	"github.com/dkeysil/go-order-utils/pkg/eip712"
+	"github.com/dkeysil/go-order-utils/pkg/model"
+	"github.com/dkeysil/go-order-utils/pkg/signer"
+	"github.com/dkeysil/go-order-utils/pkg/utils"
 )
 
 // ExchangeOrderBuilderImpl is the default ExchangeOrderBuilder implementation.

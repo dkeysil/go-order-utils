@@ -7,7 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/polymarket/go-order-utils/pkg/model"
+	"github.com/dkeysil/go-order-utils/pkg/model"
 	"github.com/stretchr/testify/assert"
 )
 

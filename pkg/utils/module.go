@@ -8,8 +8,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/polymarket/go-order-utils/pkg/config"
-	"github.com/polymarket/go-order-utils/pkg/model"
+	"github.com/dkeysil/go-order-utils/pkg/config"
+	"github.com/dkeysil/go-order-utils/pkg/model"
 )
 
 // GetVerifyingContractAddress returns the deployed address of the requested

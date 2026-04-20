@@ -4,7 +4,7 @@ package builder
 import (
 	"crypto/ecdsa"
 
-	"github.com/polymarket/go-order-utils/pkg/model"
+	"github.com/dkeysil/go-order-utils/pkg/model"
 )
 
 // ExchangeOrderBuilder turns OrderData into signed V2 CTF Exchange orders.
