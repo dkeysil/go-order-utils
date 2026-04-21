@@ -2,7 +2,7 @@
 
 Golang utilities used to generate and sign orders from Polymarket's CTF Exchange.
 
-This library targets **CTF Exchange V2** (EIP-712 domain version `"2"`, live 2026-04-22).
+This library targets **CTF Exchange V2** (EIP-712 domain version `"2"`, live 2026-04-28).
 For the V1 order format use commit `9383993` or earlier.
 
 ### V2 highlights
