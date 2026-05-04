@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/dkeysil/go-order-utils/pkg/config"
 	"github.com/dkeysil/go-order-utils/pkg/model"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // GetVerifyingContractAddress returns the deployed address of the requested

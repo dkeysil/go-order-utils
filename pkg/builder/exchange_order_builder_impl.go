@@ -2,14 +2,16 @@ package builder
 
 import (
 	"crypto/ecdsa"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/dkeysil/go-order-utils/pkg/depositwallet"
 	"github.com/dkeysil/go-order-utils/pkg/eip712"
 	"github.com/dkeysil/go-order-utils/pkg/model"
 	"github.com/dkeysil/go-order-utils/pkg/signer"
 	"github.com/dkeysil/go-order-utils/pkg/utils"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // ExchangeOrderBuilderImpl is the default ExchangeOrderBuilder implementation.
@@ -59,18 +61,33 @@ func NewExchangeOrderBuilderImpl(chainID *big.Int, saltGenerator func() int64, t
 	}
 }
 
-// BuildSignedOrder assembles an Order, hashes it, and attaches an ECDSA signature.
+// BuildSignedOrder assembles an Order and attaches its signature.
 //
-// For EOA / POLY_PROXY / POLY_GNOSIS_SAFE orders the returned signature is
-// locally verified against order.Signer via ecrecover. For POLY_1271 orders
-// the local check is skipped: order.Signer is a smart-contract address, so
-// ecrecover cannot reproduce it — the signature is instead validated on-chain
-// via EIP-1271 (`isValidSignature`) by the operator at fill time. Callers
-// must ensure the contract authorizes the provided privateKey's EOA.
+// For EOA / POLY_PROXY / POLY_GNOSIS_SAFE the signature is the 65-byte ECDSA
+// over the EIP-712 order digest, locally verified via ecrecover.
+//
+// For POLY_1271 the signature is an ERC-7739 composite for Polymarket deposit
+// wallets:
+//
+//	innerSig(65) || appDomainSep(32) || contentsHash(32) || orderTypeString || uint16_BE(len)
+//
+// innerSig is the EOA's signature over the EIP-712 digest of a TypedDataSign
+// struct under the CTFExchange app domain; the wallet's own EIP-712 domain
+// (DepositWallet/1, verifyingContract = order.Signer) is encoded inside that
+// struct. The wallet validates this on-chain via isValidSignature, so no
+// local ecrecover-vs-Signer check is performed.
 func (e *ExchangeOrderBuilderImpl) BuildSignedOrder(privateKey *ecdsa.PrivateKey, orderData *model.OrderData, contract model.VerifyingContract) (*model.SignedOrder, error) {
 	order, err := e.BuildOrder(orderData)
 	if err != nil {
 		return nil, err
+	}
+
+	if order.SignatureType == uint8(model.POLY_1271) {
+		signature, err := e.buildPoly1271Signature(privateKey, order, contract)
+		if err != nil {
+			return nil, err
+		}
+		return &model.SignedOrder{Order: *order, Signature: signature}, nil
 	}
 
 	orderHash, err := e.BuildOrderHash(order, contract)
@@ -83,14 +100,12 @@ func (e *ExchangeOrderBuilderImpl) BuildSignedOrder(privateKey *ecdsa.PrivateKey
 		return nil, err
 	}
 
-	if order.SignatureType != uint8(model.POLY_1271) {
-		ok, err := signer.ValidateSignature(order.Signer, orderHash, signature)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("signature error")
-		}
+	ok, err := signer.ValidateSignature(order.Signer, orderHash, signature)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("signature error")
 	}
 
 	return &model.SignedOrder{
@@ -151,7 +166,23 @@ func (e *ExchangeOrderBuilderImpl) BuildOrderHash(order *model.Order, contract m
 		return model.OrderHash{}, fmt.Errorf("unsupported verifying contract %d for chain %s", contract, e.chainID)
 	}
 
-	values := []any{
+	structHash, err := hashOrderStruct(order)
+	if err != nil {
+		return model.OrderHash{}, err
+	}
+	return eip712.HashFromStructHash(domainSeparator, structHash), nil
+}
+
+// BuildOrderSignature signs orderHash with privateKey and returns the 65-byte
+// ECDSA signature.
+func (e *ExchangeOrderBuilderImpl) BuildOrderSignature(privateKey *ecdsa.PrivateKey, orderHash model.OrderHash) (model.OrderSignature, error) {
+	return signer.Sign(privateKey, orderHash)
+}
+
+// hashOrderStruct returns hashStruct(Order) — the EIP-712 inner struct hash,
+// reused as `contentsHash` in the ERC-7739 wrap for POLY_1271 orders.
+func hashOrderStruct(order *model.Order) (common.Hash, error) {
+	return eip712.HashStruct(orderStructure, []any{
 		orderStructureHash,
 		order.Salt,
 		order.Maker,
@@ -164,12 +195,46 @@ func (e *ExchangeOrderBuilderImpl) BuildOrderHash(order *model.Order, contract m
 		order.Timestamp,
 		order.Metadata,
 		order.Builder,
-	}
-	return eip712.HashTypedDataV4(domainSeparator, orderStructure, values)
+	})
 }
 
-// BuildOrderSignature signs orderHash with privateKey and returns the 65-byte
-// ECDSA signature.
-func (e *ExchangeOrderBuilderImpl) BuildOrderSignature(privateKey *ecdsa.PrivateKey, orderHash model.OrderHash) (model.OrderSignature, error) {
-	return signer.Sign(privateKey, orderHash)
+// buildPoly1271Signature produces the ERC-7739 composite signature accepted
+// by Polymarket deposit wallets' isValidSignature.
+func (e *ExchangeOrderBuilderImpl) buildPoly1271Signature(privateKey *ecdsa.PrivateKey, order *model.Order, contract model.VerifyingContract) (model.OrderSignature, error) {
+	appDomainSep, ok := e.domainSeparators[contract]
+	if !ok {
+		return nil, fmt.Errorf("unsupported verifying contract %d for chain %s", contract, e.chainID)
+	}
+
+	contentsHash, err := hashOrderStruct(order)
+	if err != nil {
+		return nil, err
+	}
+
+	outerStructHash, err := eip712.HashStruct(typedDataSignArgs, []any{
+		typedDataSignTypeHash,
+		contentsHash,
+		depositwallet.DomainName,
+		depositwallet.DomainVersion,
+		e.chainID,
+		order.Signer, // verifyingContract = the deposit wallet itself
+		common.Hash{},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	digest := eip712.HashFromStructHash(appDomainSep, outerStructHash)
+	innerSig, err := signer.Sign(privateKey, digest)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]byte, 0, len(innerSig)+common.HashLength*2+len(orderTypeString)+2)
+	out = append(out, innerSig...)
+	out = append(out, appDomainSep[:]...)
+	out = append(out, contentsHash[:]...)
+	out = append(out, orderTypeString...)
+	out = binary.BigEndian.AppendUint16(out, uint16(len(orderTypeString)))
+	return out, nil
 }
