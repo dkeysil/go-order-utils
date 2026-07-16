@@ -41,12 +41,12 @@ func NewExchangeOrderBuilderImpl(chainID *big.Int, saltGenerator func() int64, t
 	}
 
 	domainSeparators := map[model.VerifyingContract]common.Hash{}
-	for _, contract := range []model.VerifyingContract{model.CTFExchange, model.NegRiskCTFExchange} {
+	for contract, version := range protocolVersions {
 		addr, err := utils.GetVerifyingContractAddress(chainID, contract)
 		if err != nil {
 			continue
 		}
-		sep, err := eip712.BuildEIP712DomainSeparator(protocolName, protocolVersion, chainID, addr)
+		sep, err := eip712.BuildEIP712DomainSeparator(protocolName, version, chainID, addr)
 		if err != nil {
 			continue
 		}

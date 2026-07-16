@@ -25,6 +25,11 @@ func GetVerifyingContractAddress(chainID *big.Int, contract model.VerifyingContr
 		return contracts.Exchange, nil
 	case model.NegRiskCTFExchange:
 		return contracts.NegRiskExchange, nil
+	case model.CTFExchangeV3:
+		if contracts.ExchangeV3 == (common.Address{}) {
+			return common.Address{}, fmt.Errorf("exchange v3 is not deployed on chain %s", chainID)
+		}
+		return contracts.ExchangeV3, nil
 	}
 
 	return common.Address{}, fmt.Errorf("invalid contract")

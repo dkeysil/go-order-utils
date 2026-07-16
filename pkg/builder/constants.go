@@ -2,13 +2,21 @@ package builder
 
 import (
 	"github.com/dkeysil/go-order-utils/pkg/eip712"
+	"github.com/dkeysil/go-order-utils/pkg/model"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
-	protocolName    = crypto.Keccak256Hash([]byte("Polymarket CTF Exchange"))
-	protocolVersion = crypto.Keccak256Hash([]byte("2"))
+	protocolName = crypto.Keccak256Hash([]byte("Polymarket CTF Exchange"))
+
+	// All exchanges share the domain name; only the domain version differs.
+	protocolVersions = map[model.VerifyingContract]common.Hash{
+		model.CTFExchange:        crypto.Keccak256Hash([]byte("2")),
+		model.NegRiskCTFExchange: crypto.Keccak256Hash([]byte("2")),
+		model.CTFExchangeV3:      crypto.Keccak256Hash([]byte("3")),
+	}
 )
 
 var (
