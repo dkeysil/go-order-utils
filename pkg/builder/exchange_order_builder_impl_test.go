@@ -214,6 +214,101 @@ func TestV2Goldens(t *testing.T) {
 	}
 }
 
+// TestExchangeV3Goldens asserts the Go builder reproduces viem digests and
+// signatures byte-for-byte for the combos exchange (domain version "3",
+// Polygon-mainnet only). Vectors from scripts/gen_v3_vectors.mjs; viem's
+// hashing under this domain was verified byte-exact against on-chain
+// OrderFilled topic1 in Polygon tx 0xdfe5c6f0e78e59da197ffe1ef52598438549
+// b89b26cd742711df088b46c9e8c5.
+func TestExchangeV3Goldens(t *testing.T) {
+	maticChainID := big.NewInt(137)
+
+	cases := []struct {
+		name     string
+		sigType  model.SignatureType
+		metadata common.Hash
+		builder  common.Hash
+		hash     string
+		sig      string
+	}{
+		{
+			name:    "ExchangeV3 EOA",
+			sigType: model.EOA,
+			hash:    "0xaed1a8dc29aa2755071bb98c721f311b41e717d2681e8946887b1a93877d7d11",
+			sig:     "679549ff3a62108b5e0d91895e51eebbcf5c503f020759f27e827a245d4160b562875d2cfba5f2a7472ab7333c92fde8c19d21a0ab156b6d9143cb9021b256691c",
+		},
+		{
+			name:    "ExchangeV3 POLY_GNOSIS_SAFE",
+			sigType: model.POLY_GNOSIS_SAFE,
+			hash:    "0xd01dff96a4654f95678ffc11a41a38a01b5cc5b7b28ed88bac68b6bf0ef4cbbd",
+			sig:     "69accca9cce8e6cadeddf5370a6b097321f2b2b669579b34f9b31fb19ddf4512138da39edcd58fe7bab6ceb4511510aee05776746d7f398790c789fb92e5ad161b",
+		},
+		{
+			name:     "ExchangeV3 EOA non-zero metadata+builder",
+			sigType:  model.EOA,
+			metadata: nonZeroMetadataValue,
+			builder:  nonZeroBuilderValue,
+			hash:     "0xd4d8244b8361bde380da5aae592a7579bb72805828c9c821350e1beda80cfee3",
+			sig:      "f6c515a3e72e683a3e5bb1a046d597a1ee3b9427187a416b3eea801ad5ca9e2e66c3603d6b2392c59e0a6576a3201b6c344a65ddeec822242aabdb25c22226f31b",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			b := NewExchangeOrderBuilderImpl(maticChainID, func() int64 { return salt }, func() int64 { return timestampMs })
+			data := &model.OrderData{
+				Maker:         signerAddress.Hex(),
+				TokenId:       "1234",
+				MakerAmount:   "100000000",
+				TakerAmount:   "50000000",
+				Side:          model.BUY,
+				SignatureType: tc.sigType,
+				Timestamp:     timestampMs,
+				Metadata:      tc.metadata,
+				Builder:       tc.builder,
+			}
+
+			order, err := b.BuildOrder(data)
+			assert.NoError(t, err)
+
+			hash, err := b.BuildOrderHash(order, model.CTFExchangeV3)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.hash, hash.Hex())
+
+			signed, err := b.BuildSignedOrder(privateKey, data, model.CTFExchangeV3)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.sig, hex.EncodeToString(signed.Signature))
+		})
+	}
+}
+
+// TestExchangeV3DomainSeparator pins the precomputed domain separator to the
+// value ExchangeV3's domainSeparator() (0xf698da25) returns on Polygon.
+func TestExchangeV3DomainSeparator(t *testing.T) {
+	b := NewExchangeOrderBuilderImpl(big.NewInt(137), nil, nil)
+	sep, ok := b.domainSeparators[model.CTFExchangeV3]
+	assert.True(t, ok)
+	assert.Equal(t, "0x466c63910185bbd55e8679264200c4e0abdcbb0c6264eb3d41d13326022e095b", sep.Hex())
+}
+
+// TestExchangeV3NotOnAmoy: no known Amoy deployment — hashing must error, not
+// silently use a wrong domain.
+func TestExchangeV3NotOnAmoy(t *testing.T) {
+	b := newFixedBuilder()
+	order, err := b.BuildOrder(&model.OrderData{
+		Maker:       signerAddress.Hex(),
+		TokenId:     "1",
+		MakerAmount: "1",
+		TakerAmount: "1",
+		Side:        model.BUY,
+		Timestamp:   timestampMs,
+	})
+	assert.NoError(t, err)
+
+	_, err = b.BuildOrderHash(order, model.CTFExchangeV3)
+	assert.Error(t, err)
+}
+
 // TestBuildSignedOrder_POLY1271WireFormat decomposes the ERC-7739 composite
 // signature and asserts each section matches the spec the deposit wallet's
 // isValidSignature reads from:
@@ -257,7 +352,7 @@ func TestBuildSignedOrder_POLY1271WireFormat(t *testing.T) {
 	lenSuffix := sig[typeBytesEnd:]
 
 	expectedDomainSep, err := eip712.BuildEIP712DomainSeparator(
-		protocolName, protocolVersion, chainID,
+		protocolName, protocolVersions[model.CTFExchange], chainID,
 		common.HexToAddress("0xE111180000d2663C0091e4f400237545B87B996B"), // CTFExchange amoy
 	)
 	assert.NoError(t, err)

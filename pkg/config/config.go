@@ -8,13 +8,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Contracts bundles the Polymarket V2 protocol addresses for a single chain.
+// Contracts bundles the Polymarket protocol addresses for a single chain.
 type Contracts struct {
 	Exchange        common.Address
 	NegRiskExchange common.Address
-	NegRiskAdapter  common.Address
-	Collateral      common.Address
-	Conditional     common.Address
+	// ExchangeV3 is the combos (RFQ) exchange; zero on chains without a deployment.
+	ExchangeV3     common.Address
+	NegRiskAdapter common.Address
+	Collateral     common.Address
+	Conditional    common.Address
 }
 
 var (
@@ -34,13 +36,14 @@ var (
 	maticContracts = &Contracts{
 		Exchange:        exchangeV2,
 		NegRiskExchange: negRiskExchangeV2,
+		ExchangeV3:      common.HexToAddress("0xe3333700cA9d93003F00f0F71f8515005F6c00Aa"),
 		NegRiskAdapter:  negRiskAdapter,
 		Collateral:      collateral,
 		Conditional:     common.HexToAddress("0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"),
 	}
 )
 
-// GetContracts returns the Polymarket V2 contract set for the given chain id.
+// GetContracts returns the Polymarket contract set for the given chain id.
 // Supported chains: 137 (Polygon mainnet), 80002 (Amoy).
 func GetContracts(chainID int64) (*Contracts, error) {
 	switch chainID {
