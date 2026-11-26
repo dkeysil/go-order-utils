@@ -25,9 +25,12 @@ var (
 	negRiskAdapter    = common.HexToAddress("0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296")
 	collateral        = common.HexToAddress("0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB")
 
+	exchangeV3 = common.HexToAddress("0xe3333700cA9d93003F00f0F71f8515005F6c00Aa")
+
 	amoyContracts = &Contracts{
 		Exchange:        exchangeV2,
 		NegRiskExchange: negRiskExchangeV2,
+		ExchangeV3:      exchangeV3,
 		NegRiskAdapter:  negRiskAdapter,
 		Collateral:      collateral,
 		Conditional:     common.HexToAddress("0x69308FB512518e39F9b16112fA8d994F4e2Bf8bB"),
@@ -36,7 +39,7 @@ var (
 	maticContracts = &Contracts{
 		Exchange:        exchangeV2,
 		NegRiskExchange: negRiskExchangeV2,
-		ExchangeV3:      common.HexToAddress("0xe3333700cA9d93003F00f0F71f8515005F6c00Aa"),
+		ExchangeV3:      exchangeV3,
 		NegRiskAdapter:  negRiskAdapter,
 		Collateral:      collateral,
 		Conditional:     common.HexToAddress("0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"),

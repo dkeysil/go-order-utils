@@ -13,6 +13,7 @@ func TestGetVerifyingContractAddress(t *testing.T) {
 	// V2 exchanges share the same addresses on mainnet and Amoy.
 	exchangeV2 := common.HexToAddress("0xE111180000d2663C0091e4f400237545B87B996B")
 	negRiskExchangeV2 := common.HexToAddress("0xe2222d279d744050d28e00520010520000310F59")
+	exchangeV3 := common.HexToAddress("0xe3333700cA9d93003F00f0F71f8515005F6c00Aa")
 
 	// amoy
 	contract, err := GetVerifyingContractAddress(big.NewInt(80002), model.CTFExchange)
@@ -22,6 +23,10 @@ func TestGetVerifyingContractAddress(t *testing.T) {
 	contract, err = GetVerifyingContractAddress(big.NewInt(80002), model.NegRiskCTFExchange)
 	assert.NoError(t, err)
 	assert.Equal(t, negRiskExchangeV2.Hex(), contract.Hex())
+
+	contract, err = GetVerifyingContractAddress(big.NewInt(80002), model.CTFExchangeV3)
+	assert.NoError(t, err)
+	assert.Equal(t, exchangeV3.Hex(), contract.Hex())
 
 	// polygon mainnet
 	contract, err = GetVerifyingContractAddress(big.NewInt(137), model.CTFExchange)
