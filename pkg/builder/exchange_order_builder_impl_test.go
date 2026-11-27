@@ -293,7 +293,7 @@ func TestExchangeV3DomainSeparator(t *testing.T) {
 
 // TestExchangeV3NotOnAmoy: no known Amoy deployment — hashing must error, not
 // silently use a wrong domain.
-func TestExchangeV3NotOnAmoy(t *testing.T) {
+func TestExchangeV3OnAmoy(t *testing.T) {
 	b := newFixedBuilder()
 	order, err := b.BuildOrder(&model.OrderData{
 		Maker:       signerAddress.Hex(),
@@ -305,8 +305,11 @@ func TestExchangeV3NotOnAmoy(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	_, err = b.BuildOrderHash(order, model.CTFExchangeV3)
-	assert.Error(t, err)
+	hash, err := b.BuildOrderHash(order, model.CTFExchangeV3)
+	assert.NoError(t, err)
+	v2Hash, err := b.BuildOrderHash(order, model.CTFExchange)
+	assert.NoError(t, err)
+	assert.NotEqual(t, v2Hash, hash)
 }
 
 // TestBuildSignedOrder_POLY1271WireFormat decomposes the ERC-7739 composite
